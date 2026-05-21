@@ -51,6 +51,16 @@ def login():
     return jsonify({'error': 'Incorrect PIN'}), 401
 
 
+@app.route('/api/debug-pin')
+def debug_pin():
+    return jsonify({
+        'APP_PIN_set': bool(APP_PIN),
+        'APP_PIN_length': len(APP_PIN),
+        'APP_PIN_first_char': APP_PIN[0] if APP_PIN else None,
+        'APP_PIN_repr': repr(APP_PIN)
+    })
+
+
 @app.route('/api/logout', methods=['POST'])
 def logout():
     session.clear()
