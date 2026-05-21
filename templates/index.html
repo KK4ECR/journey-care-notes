@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Care Team Notes – Journey Church</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Prevent iOS auto-zoom on input focus */
+    input, textarea, select { font-size: 16px !important; }
+    .fade-in { animation: fadeIn 0.18s ease-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans">
+
+<!-- ── PIN SCREEN ─────────────────────────────────────────── -->
+<div id="pinScreen" class="{{ 'hidden' if authenticated else '' }} flex flex-col items-center justify-center min-h-screen p-6">
+  <div class="w-full max-w-sm bg-white rounded-2xl shadow-xl p-8">
+    <div class="text-center mb-7">
+      <div class="text-5xl mb-3">✝️</div>
+      <h1 class="text-2xl font-bold text-slate-800">Care Team Notes</h1>
+      <p class="text-slate-500 mt-1 text-sm">Journey Church</p>
+    </div>
+    <label class="block text-sm font-semibold text-slate-700 mb-1">Team PIN</label>
+    <input id="pinInput" type="password" inputmode="numeric" placeholder="Enter PIN"
+           autocomplete="current-password"
+           class="w-full border border-slate-300 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3">
+    <div id="pinError" class="hidden text-red-600 text-sm text-center mb-3"></div>
+    <button onclick="submitPin()"
+            class="w-full bg-blue-600 text-white rounded-xl px-4 py-3 font-semibold text-base hover:bg-blue-700 active:scale-95 transition-all">
+      Sign In
+    </button>
+  </div>
+</div>
+
+<!-- ── MAIN APP ────────────────────────────────────────────── -->
+<div id="mainApp" class="{{ '' if authenticated else 'hidden' }} max-w-lg mx-auto px-4 pb-10">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between pt-5 pb-3">
+    <div>
+      <h1 class="text-lg font-bold text-slate-800">Care Team Notes</h1>
+      <p class="text-xs text-slate-500">Journey Church</p>
+    </div>
+    <button onclick="logout()" class="text-xs text-slate-400 hover:text-slate-600 transition-colors">Sign out</button>
+  </div>
+
+  <!-- SUCCESS SCREEN -->
+  <div id="successScreen" class="hidden fade-in bg-white rounded-2xl shadow p-8 text-center mt-2">
+    <div class="text-6xl mb-4">✅</div>
+    <h2 class="text-xl font-bold text-slate-800 mb-2">Note Saved!</h2>
+    <p class="text-slate-600 mb-1">Added to <span id="successName" class="font-semibold text-slate-800"></span>'s profile</p>
+    <p class="text-xs text-slate-400 mb-7">Filed under <em>Care Team Actions</em></p>
+    <button onclick="resetForm()"
+            class="w-full bg-blue-600 text-white rounded-xl px-4 py-3 font-semibold hover:bg-blue-700 active:scale-95 transition-all">
+      Add Another Note
+    </button>
+  </div>
+
+  <!-- NOTE FORM -->
+  <div id="noteForm">
+
+    <!-- Step 1: Your name -->
+    <div class="bg-white rounded-2xl shadow p-4 mb-4 mt-2">
+      <label class="block text-sm font-semibold text-slate-700 mb-1">
+        Your Name <span class="font-normal text-slate-400">(Care Team Member)</span>
+      </label>
+      <input id="caregiverName" type="text" placeholder="Your full name"
+             autocomplete="name" autocorrect="off" spellcheck="false"
+             class="w-full border border-slate-300 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <p class="text-xs text-slate-400 mt-1">Saved automatically for next time</p>
+    </div>
+
+    <!-- Step 2: Member search -->
+    <div class="bg-white rounded-2xl shadow p-4 mb-4">
+      <label class="block text-sm font-semibold text-slate-700 mb-1">
+        Member Name <span class="font-normal text-slate-400">(who received care)</span>
+      </label>
+
+      <!-- Search input -->
+      <div class="relative">
+        <input id="searchInput" type="search" placeholder="Type name to search…"
+               autocomplete="off" autocorrect="off" spellcheck="false"
+               class="w-full border border-slate-300 rounded-xl px-4 py-3 pr-10 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <div id="searchSpinner" class="hidden absolute right-3 top-3.5 pointer-events-none">
+          <svg class="animate-spin h-5 w-5 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Selected person badge -->
+      <div id="selectedPerson" class="hidden mt-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+        <div>
+          <p class="font-semibold text-blue-800" id="selectedName"></p>
+          <p class="text-xs text-blue-500" id="selectedMembership"></p>
+        </div>
+        <button onclick="clearSelection()"
+                class="ml-3 text-blue-400 hover:text-blue-700 text-sm font-medium transition-colors">
+          ✕ Change
+        </button>
+      </div>
+
+      <!-- Results list -->
+      <div id="searchResults" class="mt-2 space-y-1"></div>
+    </div>
+
+    <!-- Step 3: Note -->
+    <div id="noteSection" class="hidden bg-white rounded-2xl shadow p-4 mb-4 fade-in">
+      <label class="block text-sm font-semibold text-slate-700 mb-1">Care Team Activity Note</label>
+      <textarea id="noteText" rows="6"
+                placeholder="Describe the care activity — e.g. 'Visited John at home on May 21. He is recovering well from surgery and appreciated the prayer time together.'"
+                class="w-full border border-slate-300 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none leading-relaxed"></textarea>
+
+      <div id="submitError" class="hidden mt-2 text-red-600 text-sm"></div>
+
+      <button id="submitBtn" onclick="submitNote()"
+              class="mt-3 w-full bg-emerald-600 text-white rounded-xl px-4 py-3 font-semibold text-base hover:bg-emerald-700 active:scale-95 transition-all">
+        Save Note to Profile
+      </button>
+    </div>
+
+  </div><!-- /noteForm -->
+</div><!-- /mainApp -->
+
+<script>
+  let selectedPersonId   = null;
+  let selectedPersonName = null;
+  let careCategoryId     = null;
+  let searchTimer        = null;
+
+  // ── Initialisation ──────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    // Restore caregiver name
+    const saved = localStorage.getItem('caregiverName');
+    if (saved) document.getElementById('caregiverName').value = saved;
+
+    document.getElementById('caregiverName').addEventListener('change', () => {
+      localStorage.setItem('caregiverName', document.getElementById('caregiverName').value.trim());
+    });
+
+    document.getElementById('pinInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitPin();
+    });
+
+    document.getElementById('searchInput').addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const q = document.getElementById('searchInput').value.trim();
+      if (q.length < 2) {
+        document.getElementById('searchResults').innerHTML = '';
+        return;
+      }
+      searchTimer = setTimeout(() => searchPeople(q), 380);
+    });
+
+    {% if authenticated %}
+    fetchCategoryId();
+    {% endif %}
+  });
+
+  // ── PIN auth ────────────────────────────────────────────
+  async function submitPin() {
+    const pin    = document.getElementById('pinInput').value;
+    const errEl  = document.getElementById('pinError');
+    errEl.classList.add('hidden');
+
+    const resp = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin })
+    });
+
+    if (resp.ok) {
+      document.getElementById('pinScreen').classList.add('hidden');
+      document.getElementById('mainApp').classList.remove('hidden');
+      fetchCategoryId();
+    } else {
+      errEl.textContent = 'Incorrect PIN. Please try again.';
+      errEl.classList.remove('hidden');
+      document.getElementById('pinInput').value = '';
+    }
+  }
+
+  async function logout() {
+    await fetch('/api/logout', { method: 'POST' });
+    document.getElementById('mainApp').classList.add('hidden');
+    document.getElementById('pinScreen').classList.remove('hidden');
+    document.getElementById('pinInput').value = '';
+  }
+
+  // ── Fetch care category ─────────────────────────────────
+  async function fetchCategoryId() {
+    try {
+      const resp = await fetch('/api/care_category_id');
+      if (resp.ok) {
+        const data = await resp.json();
+        careCategoryId = data.id;
+        if (data.warning) console.warn('[PCO]', data.warning);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // ── People search ───────────────────────────────────────
+  async function searchPeople(query) {
+    document.getElementById('searchSpinner').classList.remove('hidden');
+    document.getElementById('searchResults').innerHTML = '';
+
+    try {
+      const resp = await fetch('/api/search?q=' + encodeURIComponent(query));
+      document.getElementById('searchSpinner').classList.add('hidden');
+      if (!resp.ok) return;
+
+      const people = await resp.json();
+      const container = document.getElementById('searchResults');
+
+      if (!people.length) {
+        container.innerHTML = '<p class="text-sm text-slate-400 text-center py-3">No results found</p>';
+        return;
+      }
+
+      container.innerHTML = people.map(p => `
+        <button data-pid="${esc(p.id)}" data-name="${esc(p.name)}" data-membership="${esc(p.membership || '')}"
+                class="w-full text-left px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 active:scale-95 transition-all fade-in">
+          <p class="font-semibold text-slate-800">${esc(p.name)}</p>
+          ${p.membership ? `<p class="text-xs text-slate-400 mt-0.5">${esc(p.membership)}</p>` : ''}
+        </button>
+      `).join('');
+
+      container.querySelectorAll('button').forEach(btn => {
+        btn.addEventListener('click', () =>
+          selectPerson(btn.dataset.pid, btn.dataset.name, btn.dataset.membership)
+        );
+      });
+    } catch (e) {
+      document.getElementById('searchSpinner').classList.add('hidden');
+    }
+  }
+
+  // ── Select / deselect ───────────────────────────────────
+  function selectPerson(id, name, membership) {
+    selectedPersonId   = id;
+    selectedPersonName = name;
+
+    document.getElementById('selectedName').textContent       = name;
+    document.getElementById('selectedMembership').textContent = membership;
+    document.getElementById('selectedPerson').classList.remove('hidden');
+    document.getElementById('searchResults').innerHTML = '';
+    document.getElementById('searchInput').value = '';
+
+    const noteSection = document.getElementById('noteSection');
+    noteSection.classList.remove('hidden');
+
+    setTimeout(() => {
+      noteSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById('noteText').focus();
+    }, 120);
+  }
+
+  function clearSelection() {
+    selectedPersonId   = null;
+    selectedPersonName = null;
+    document.getElementById('selectedPerson').classList.add('hidden');
+    document.getElementById('noteSection').classList.add('hidden');
+    document.getElementById('noteText').value = '';
+    document.getElementById('submitError').classList.add('hidden');
+    document.getElementById('searchInput').focus();
+  }
+
+  // ── Submit note ─────────────────────────────────────────
+  async function submitNote() {
+    const caregiverName = document.getElementById('caregiverName').value.trim();
+    const noteText      = document.getElementById('noteText').value.trim();
+    const errEl         = document.getElementById('submitError');
+    errEl.classList.add('hidden');
+
+    if (!caregiverName) {
+      document.getElementById('caregiverName').focus();
+      document.getElementById('caregiverName').classList.add('ring-2', 'ring-red-400');
+      setTimeout(() => document.getElementById('caregiverName').classList.remove('ring-2', 'ring-red-400'), 2000);
+      return;
+    }
+    if (!noteText) {
+      document.getElementById('noteText').focus();
+      return;
+    }
+
+    localStorage.setItem('caregiverName', caregiverName);
+
+    const btn = document.getElementById('submitBtn');
+    btn.textContent = 'Saving…';
+    btn.disabled    = true;
+
+    try {
+      const resp = await fetch('/api/add_note', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          person_id:        selectedPersonId,
+          person_name:      selectedPersonName,
+          note:             noteText,
+          category_id:      careCategoryId,
+          care_member_name: caregiverName
+        })
+      });
+
+      btn.textContent = 'Save Note to Profile';
+      btn.disabled    = false;
+
+      if (resp.ok) {
+        document.getElementById('successName').textContent = selectedPersonName;
+        document.getElementById('noteForm').classList.add('hidden');
+        document.getElementById('successScreen').classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        const data = await resp.json().catch(() => ({}));
+        errEl.textContent = data.error || 'Could not save note. Please try again.';
+        errEl.classList.remove('hidden');
+      }
+    } catch (e) {
+      btn.textContent = 'Save Note to Profile';
+      btn.disabled    = false;
+      errEl.textContent = 'Network error. Check your connection and try again.';
+      errEl.classList.remove('hidden');
+    }
+  }
+
+  // ── Reset to start ──────────────────────────────────────
+  function resetForm() {
+    selectedPersonId   = null;
+    selectedPersonName = null;
+    document.getElementById('noteForm').classList.remove('hidden');
+    document.getElementById('successScreen').classList.add('hidden');
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchResults').innerHTML = '';
+    document.getElementById('selectedPerson').classList.add('hidden');
+    document.getElementById('noteSection').classList.add('hidden');
+    document.getElementById('noteText').value = '';
+    document.getElementById('submitError').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // XSS-safe string escape for innerHTML
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
