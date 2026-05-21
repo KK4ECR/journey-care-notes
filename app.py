@@ -16,7 +16,8 @@ app.permanent_session_lifetime = timedelta(days=7)
 
 PCO_CLIENT_ID = os.environ.get('PCO_CLIENT_ID')
 PCO_SECRET = os.environ.get('PCO_SECRET')
-APP_PIN = os.environ.get('APP_PIN', '1234')
+def get_pin():
+    return os.environ.get('APP_PIN', '1234')
 PCO_BASE = 'https://api.planningcenteronline.com'
 CARE_CATEGORY_NAME = os.environ.get('CARE_CATEGORY_NAME', 'Care Team Actions')
 
@@ -44,7 +45,7 @@ def index():
 @app.route('/api/login', methods=['POST'])
 def login():
     pin = (request.get_json() or {}).get('pin', '')
-    if pin == APP_PIN:
+    if pin == get_pin():
         session.permanent = True
         session['authenticated'] = True
         return jsonify({'success': True})
@@ -54,10 +55,10 @@ def login():
 @app.route('/api/debug-pin')
 def debug_pin():
     return jsonify({
-        'APP_PIN_set': bool(APP_PIN),
-        'APP_PIN_length': len(APP_PIN),
-        'APP_PIN_first_char': APP_PIN[0] if APP_PIN else None,
-        'APP_PIN_repr': repr(APP_PIN)
+        'APP_PIN_set': bool(get_pin()),
+        'APP_PIN_length': len(get_pin()),
+        'APP_PIN_first_char': get_pin()[0] if get_pin() else None,
+        'APP_PIN_repr': repr(get_pin())
     })
 
 
