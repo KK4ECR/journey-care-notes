@@ -56,7 +56,7 @@
     <div class="text-6xl mb-4">✅</div>
     <h2 class="text-xl font-bold text-slate-800 mb-2">Note Saved!</h2>
     <p class="text-slate-600 mb-1">Added to <span id="successName" class="font-semibold text-slate-800"></span>'s profile</p>
-    <p class="text-xs text-slate-400 mb-7">Filed under <em>Care Team Actions</em></p>
+    <p class="text-xs text-slate-400 mb-7">Filed under <em id="successCategory"></em></p>
     <button onclick="resetForm()"
             class="w-full bg-blue-600 text-white rounded-xl px-4 py-3 font-semibold hover:bg-blue-700 active:scale-95 transition-all">
       Add Another Note
@@ -77,13 +77,34 @@
       <p class="text-xs text-slate-400 mt-1">Saved automatically for next time</p>
     </div>
 
-    <!-- Step 2: Member search -->
+    <!-- Step 2: Note type -->
+    <div class="bg-white rounded-2xl shadow p-4 mb-4">
+      <label class="block text-sm font-semibold text-slate-700 mb-3">Type of Care Activity</label>
+      <div class="grid grid-cols-2 gap-3">
+
+        <button id="typeBtnCare" onclick="selectNoteType('care')"
+                class="flex flex-col items-center py-4 px-2 rounded-xl border-2 border-blue-500 bg-blue-50 transition-all active:scale-95">
+          <span class="text-3xl mb-2">🤝</span>
+          <p class="font-semibold text-sm text-blue-800">Care Action</p>
+          <p class="text-xs text-blue-600 mt-0.5 text-center">Visit, prayer, errand</p>
+        </button>
+
+        <button id="typeBtnPhone" onclick="selectNoteType('phone')"
+                class="flex flex-col items-center py-4 px-2 rounded-xl border-2 border-slate-200 bg-slate-50 transition-all active:scale-95">
+          <span class="text-3xl mb-2">📞</span>
+          <p class="font-semibold text-sm text-slate-600">Phone Call</p>
+          <p class="text-xs text-slate-400 mt-0.5 text-center">Wellness check, follow-up</p>
+        </button>
+
+      </div>
+    </div>
+
+    <!-- Step 3: Member search -->
     <div class="bg-white rounded-2xl shadow p-4 mb-4">
       <label class="block text-sm font-semibold text-slate-700 mb-1">
         Member Name <span class="font-normal text-slate-400">(who received care)</span>
       </label>
 
-      <!-- Search input -->
       <div class="relative">
         <input id="searchInput" type="search" placeholder="Type name to search…"
                autocomplete="off" autocorrect="off" spellcheck="false"
@@ -101,9 +122,10 @@
         <div>
           <p class="font-semibold text-blue-800" id="selectedName"></p>
           <p class="text-xs text-blue-500" id="selectedMembership"></p>
+          <p class="text-xs text-slate-500 mt-0.5" id="selectedContact"></p>
         </div>
         <button onclick="clearSelection()"
-                class="ml-3 text-blue-400 hover:text-blue-700 text-sm font-medium transition-colors">
+                class="ml-3 text-blue-400 hover:text-blue-700 text-sm font-medium transition-colors flex-shrink-0">
           ✕ Change
         </button>
       </div>
@@ -112,11 +134,13 @@
       <div id="searchResults" class="mt-2 space-y-1"></div>
     </div>
 
-    <!-- Step 3: Note -->
+    <!-- Step 4: Note -->
     <div id="noteSection" class="hidden bg-white rounded-2xl shadow p-4 mb-4 fade-in">
-      <label class="block text-sm font-semibold text-slate-700 mb-1">Care Team Activity Note</label>
+      <label class="block text-sm font-semibold text-slate-700 mb-1">
+        Note <span id="noteSectionLabel" class="font-normal text-slate-400"></span>
+      </label>
       <textarea id="noteText" rows="6"
-                placeholder="Describe the care activity — e.g. 'Visited John at home on May 21. He is recovering well from surgery and appreciated the prayer time together.'"
+                placeholder="Describe what happened…"
                 class="w-full border border-slate-300 rounded-xl px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none leading-relaxed"></textarea>
 
       <div id="submitError" class="hidden mt-2 text-red-600 text-sm"></div>
@@ -133,12 +157,17 @@
 <script>
   let selectedPersonId   = null;
   let selectedPersonName = null;
-  let careCategoryId     = null;
+  let selectedNoteType   = 'care';
+  let noteCategories     = { care: null, phone: null };
   let searchTimer        = null;
+
+  const placeholders = {
+    care:  "Describe the care activity — e.g. 'Visited John at home on May 21. He is recovering well from surgery and appreciated the prayer time together.'",
+    phone: "Describe the call — e.g. 'Called to check in after his procedure. He is doing well and mentioned he could use a grocery run this week.'"
+  };
 
   // ── Initialisation ──────────────────────────────────────
   window.addEventListener('DOMContentLoaded', () => {
-    // Restore caregiver name
     const saved = localStorage.getItem('caregiverName');
     if (saved) document.getElementById('caregiverName').value = saved;
 
@@ -161,14 +190,14 @@
     });
 
     {% if authenticated %}
-    fetchCategoryId();
+    fetchCategories();
     {% endif %}
   });
 
   // ── PIN auth ────────────────────────────────────────────
   async function submitPin() {
-    const pin    = document.getElementById('pinInput').value;
-    const errEl  = document.getElementById('pinError');
+    const pin   = document.getElementById('pinInput').value;
+    const errEl = document.getElementById('pinError');
     errEl.classList.add('hidden');
 
     const resp = await fetch('/api/login', {
@@ -180,7 +209,7 @@
     if (resp.ok) {
       document.getElementById('pinScreen').classList.add('hidden');
       document.getElementById('mainApp').classList.remove('hidden');
-      fetchCategoryId();
+      fetchCategories();
     } else {
       errEl.textContent = 'Incorrect PIN. Please try again.';
       errEl.classList.remove('hidden');
@@ -195,14 +224,51 @@
     document.getElementById('pinInput').value = '';
   }
 
-  // ── Fetch care category ─────────────────────────────────
-  async function fetchCategoryId() {
+  // ── Note type selector ──────────────────────────────────
+  function selectNoteType(type) {
+    selectedNoteType = type;
+
+    const careBtn  = document.getElementById('typeBtnCare');
+    const phoneBtn = document.getElementById('typeBtnPhone');
+
+    if (type === 'care') {
+      careBtn.className  = 'flex flex-col items-center py-4 px-2 rounded-xl border-2 border-blue-500 bg-blue-50 transition-all active:scale-95';
+      careBtn.querySelector('p').className = 'font-semibold text-sm text-blue-800';
+      careBtn.querySelectorAll('p')[1].className = 'text-xs text-blue-600 mt-0.5 text-center';
+
+      phoneBtn.className = 'flex flex-col items-center py-4 px-2 rounded-xl border-2 border-slate-200 bg-slate-50 transition-all active:scale-95';
+      phoneBtn.querySelector('p').className = 'font-semibold text-sm text-slate-600';
+      phoneBtn.querySelectorAll('p')[1].className = 'text-xs text-slate-400 mt-0.5 text-center';
+    } else {
+      phoneBtn.className = 'flex flex-col items-center py-4 px-2 rounded-xl border-2 border-blue-500 bg-blue-50 transition-all active:scale-95';
+      phoneBtn.querySelector('p').className = 'font-semibold text-sm text-blue-800';
+      phoneBtn.querySelectorAll('p')[1].className = 'text-xs text-blue-600 mt-0.5 text-center';
+
+      careBtn.className  = 'flex flex-col items-center py-4 px-2 rounded-xl border-2 border-slate-200 bg-slate-50 transition-all active:scale-95';
+      careBtn.querySelector('p').className = 'font-semibold text-sm text-slate-600';
+      careBtn.querySelectorAll('p')[1].className = 'text-xs text-slate-400 mt-0.5 text-center';
+    }
+
+    // Update note label and placeholder
+    const label = document.getElementById('noteSectionLabel');
+    const textarea = document.getElementById('noteText');
+    if (type === 'care') {
+      label.textContent = '(Care Team Action)';
+      textarea.placeholder = placeholders.care;
+    } else {
+      label.textContent = '(Phone Call)';
+      textarea.placeholder = placeholders.phone;
+    }
+  }
+
+  // ── Fetch categories ────────────────────────────────────
+  async function fetchCategories() {
     try {
-      const resp = await fetch('/api/care_category_id');
+      const resp = await fetch('/api/categories');
       if (resp.ok) {
         const data = await resp.json();
-        careCategoryId = data.id;
-        if (data.warning) console.warn('[PCO]', data.warning);
+        noteCategories.care  = data.care.id;
+        noteCategories.phone = data.phone.id;
       }
     } catch (e) { /* non-fatal */ }
   }
@@ -225,17 +291,23 @@
         return;
       }
 
-      container.innerHTML = people.map(p => `
-        <button data-pid="${esc(p.id)}" data-name="${esc(p.name)}" data-membership="${esc(p.membership || '')}"
-                class="w-full text-left px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 active:scale-95 transition-all fade-in">
-          <p class="font-semibold text-slate-800">${esc(p.name)}</p>
-          ${p.membership ? `<p class="text-xs text-slate-400 mt-0.5">${esc(p.membership)}</p>` : ''}
-        </button>
-      `).join('');
+      container.innerHTML = people.map(p => {
+        const contact = [p.email, p.phone].filter(Boolean).join(' · ');
+        return `
+          <button data-pid="${esc(p.id)}" data-name="${esc(p.name)}"
+                  data-membership="${esc(p.membership || '')}"
+                  data-email="${esc(p.email || '')}" data-phone="${esc(p.phone || '')}"
+                  class="w-full text-left px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 active:scale-95 transition-all fade-in">
+            <p class="font-semibold text-slate-800">${esc(p.name)}</p>
+            ${p.membership ? `<p class="text-xs text-slate-400 mt-0.5">${esc(p.membership)}</p>` : ''}
+            ${contact ? `<p class="text-xs text-slate-500 mt-0.5">${esc(contact)}</p>` : ''}
+          </button>`;
+      }).join('');
 
       container.querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () =>
-          selectPerson(btn.dataset.pid, btn.dataset.name, btn.dataset.membership)
+          selectPerson(btn.dataset.pid, btn.dataset.name, btn.dataset.membership,
+                       btn.dataset.email, btn.dataset.phone)
         );
       });
     } catch (e) {
@@ -244,15 +316,23 @@
   }
 
   // ── Select / deselect ───────────────────────────────────
-  function selectPerson(id, name, membership) {
+  function selectPerson(id, name, membership, email, phone) {
     selectedPersonId   = id;
     selectedPersonName = name;
 
     document.getElementById('selectedName').textContent       = name;
     document.getElementById('selectedMembership').textContent = membership;
+
+    const contact = [email, phone].filter(Boolean).join(' · ');
+    document.getElementById('selectedContact').textContent = contact;
+
     document.getElementById('selectedPerson').classList.remove('hidden');
     document.getElementById('searchResults').innerHTML = '';
     document.getElementById('searchInput').value = '';
+
+    // Update note label to match current type
+    const label = document.getElementById('noteSectionLabel');
+    label.textContent = selectedNoteType === 'phone' ? '(Phone Call)' : '(Care Team Action)';
 
     const noteSection = document.getElementById('noteSection');
     noteSection.classList.remove('hidden');
@@ -305,7 +385,7 @@
           person_id:        selectedPersonId,
           person_name:      selectedPersonName,
           note:             noteText,
-          category_id:      careCategoryId,
+          note_type:        selectedNoteType,
           care_member_name: caregiverName
         })
       });
@@ -314,7 +394,9 @@
       btn.disabled    = false;
 
       if (resp.ok) {
-        document.getElementById('successName').textContent = selectedPersonName;
+        const data = await resp.json();
+        document.getElementById('successName').textContent     = selectedPersonName;
+        document.getElementById('successCategory').textContent = data.category || (selectedNoteType === 'phone' ? 'Care Phone Calls' : 'Care Team Actions');
         document.getElementById('noteForm').classList.add('hidden');
         document.getElementById('successScreen').classList.remove('hidden');
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -343,6 +425,8 @@
     document.getElementById('noteSection').classList.add('hidden');
     document.getElementById('noteText').value = '';
     document.getElementById('submitError').classList.add('hidden');
+    // Reset type to Care Action
+    selectNoteType('care');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
