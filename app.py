@@ -52,19 +52,6 @@ def login():
     return jsonify({'error': 'Incorrect PIN'}), 401
 
 
-@app.route('/api/debug')
-def debug_env():
-    return jsonify({
-        'APP_PIN_repr':        repr(os.environ.get('APP_PIN')),
-        'PCO_CLIENT_ID_set':   bool(os.environ.get('PCO_CLIENT_ID')),
-        'PCO_SECRET_set':      bool(os.environ.get('PCO_SECRET')),
-        'SECRET_KEY_set':      bool(os.environ.get('SECRET_KEY')),
-        'CARE_CATEGORY_NAME':  os.environ.get('CARE_CATEGORY_NAME'),
-        'PORT':                os.environ.get('PORT'),
-        'RAILWAY_ENVIRONMENT': os.environ.get('RAILWAY_ENVIRONMENT'),
-        'all_env_keys':        sorted(os.environ.keys()),
-    })
-
 
 @app.route('/api/logout', methods=['POST'])
 def logout():
